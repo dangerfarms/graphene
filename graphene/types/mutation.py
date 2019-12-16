@@ -13,6 +13,17 @@ if MYPY:
     from typing import Dict, Type, Callable, Iterable  # NOQA
 
 
+def run_validators(arguments, *args, **kwargs):
+    for argument_name in arguments.keys():
+        argument = arguments[argument_name]
+        arg_value = kwargs[argument_name]
+        for arg_input_name in arg_value.keys():
+            validator_function_name = f"validate_{arg_input_name}"
+            if hasattr(argument, validator_function_name):
+                validator_function = argument.__getattribute__(validator_function_name)
+                validator_function(arg_value[arg_input_name])
+
+
 class MutationOptions(ObjectTypeOptions):
     arguments = None  # type: Dict[str, Argument]
     output = None  # type: Type[ObjectType]
@@ -115,7 +126,10 @@ class Mutation(ObjectType):
         if not resolver:
             mutate = getattr(cls, "mutate", None)
             assert mutate, "All mutations must define a mutate method in it"
-            resolver = get_unbound_function(mutate)
+
+            def resolver(*args, **kwargs):
+                run_validators(arguments, *args, **kwargs)
+                return get_unbound_function(mutate)(*args, **kwargs)
 
         if _meta.fields:
             _meta.fields.update(fields)
